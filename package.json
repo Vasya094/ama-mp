@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "render-build": "npm install && npm run build"
   },
   "dependencies": {
     "@types/passport-google-oauth20": "^2.0.16",
