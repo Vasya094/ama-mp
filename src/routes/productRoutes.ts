@@ -1,49 +1,53 @@
 import express from 'express';
-import { createProduct, getProducts, getProductById, updateProduct, deleteProduct } from '../controllers/productController';
-import auth from '../middleware/auth';
-import adminAuth from '../middleware/adminAuth';
+import { Request, Response } from 'express';
+import Product from '../models/Product';
+import { Product as ProductType } from '../types/product';
+import { AuthRequest } from '../middleware/auth';
+import authenticateToken from '../middleware/auth';
 
 const router = express.Router();
 
 /**
  * @swagger
- * /api/products:
- *   post:
- *     summary: Create a new product (admin only)
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - description
- *               - price
- *               - category
- *             properties:
- *               name:
- *                 type: string
- *               description:
- *                 type: string
- *               price:
- *                 type: number
- *               category:
- *                 type: string
- *               inStock:
- *                 type: number
- *     responses:
- *       201:
- *         description: Product created successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
+ * components:
+ *   schemas:
+ *     Product:
+ *       type: object
+ *       required:
+ *         - name
+ *         - description
+ *         - price
+ *         - category
+ *         - image
+ *         - placeId
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Auto-generated product ID
+ *         name:
+ *           type: string
+ *           description: Product name
+ *         description:
+ *           type: string
+ *           description: Product description
+ *         price:
+ *           type: number
+ *           description: Product price
+ *         category:
+ *           type: string
+ *           enum: [electronics, food, clothing, rent, transport]
+ *           description: Product category
+ *         image:
+ *           type: string
+ *           description: URL of the product image
+ *         inStock:
+ *           type: boolean
+ *           description: Whether the product is in stock
+ *           default: true
+ *         placeId:
+ *           type: string
+ *           description: ID of the place where the product is located
  */
-router.post('/', auth as express.RequestHandler, adminAuth as express.RequestHandler, createProduct as express.RequestHandler);
 
 /**
  * @swagger
@@ -54,14 +58,27 @@ router.post('/', auth as express.RequestHandler, adminAuth as express.RequestHan
  *     responses:
  *       200:
  *         description: List of products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Product'
  */
-router.get('/', getProducts);
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const products = await Product.find();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching products' });
+  }
+});
 
 /**
  * @swagger
  * /api/products/{id}:
  *   get:
- *     summary: Get product by ID
+ *     summary: Get a product by ID
  *     tags: [Products]
  *     parameters:
  *       - in: path
@@ -72,16 +89,66 @@ router.get('/', getProducts);
  *     responses:
  *       200:
  *         description: Product details
- *       404:
- *         description: Product not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Product'
  */
-router.get('/:id', getProductById);
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching product' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/products:
+ *   post:
+ *     summary: Create a new product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Product'
+ *     responses:
+ *       201:
+ *         description: Product created successfully
+ */
+router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const productData: Omit<ProductType, 'id'> = {
+      name: req.body.name,
+      description: req.body.description,
+      price: req.body.price,
+      category: req.body.category,
+      image: req.body.image,
+      inStock: req.body.inStock ?? true,
+      placeId: req.body.placeId,  // Add placeId
+    };
+
+    const product = new Product(productData);
+    const savedProduct = await product.save();
+    res.status(201).json(savedProduct);
+  } catch (error) {
+    res.status(400).json({ message: 'Error creating product' });
+  }
+});
 
 /**
  * @swagger
  * /api/products/{id}:
  *   put:
- *     summary: Update product (admin only)
+ *     summary: Update a product
  *     tags: [Products]
  *     security:
  *       - bearerAuth: []
@@ -96,35 +163,44 @@ router.get('/:id', getProductById);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               description:
- *                 type: string
- *               price:
- *                 type: number
- *               category:
- *                 type: string
- *               inStock:
- *                 type: number
+ *             $ref: '#/components/schemas/Product'
  *     responses:
  *       200:
  *         description: Product updated successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Product not found
  */
-router.put('/:id', auth as express.RequestHandler, adminAuth as express.RequestHandler, updateProduct as express.RequestHandler);
+router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const productData: Partial<ProductType> = {
+      name: req.body.name,
+      description: req.body.description,
+      price: req.body.price,
+      category: req.body.category,
+      image: req.body.image,
+      inStock: req.body.inStock,
+      placeId: req.body.placeId,  // Add placeId
+    };
+
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      productData,
+      { new: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    res.json(product);
+  } catch (error) {
+    res.status(400).json({ message: 'Error updating product' });
+  }
+});
 
 /**
  * @swagger
  * /api/products/{id}:
  *   delete:
- *     summary: Delete product (admin only)
+ *     summary: Delete a product
  *     tags: [Products]
  *     security:
  *       - bearerAuth: []
@@ -137,13 +213,17 @@ router.put('/:id', auth as express.RequestHandler, adminAuth as express.RequestH
  *     responses:
  *       200:
  *         description: Product deleted successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Product not found
  */
-router.delete('/:id', auth as express.RequestHandler, adminAuth as express.RequestHandler, deleteProduct as express.RequestHandler);
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting product' });
+  }
+});
 
 export default router;

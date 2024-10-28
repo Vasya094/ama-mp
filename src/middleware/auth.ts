@@ -1,28 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { UserRole } from '../models/User';
 
 export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    role: UserRole;
-  };
+  user?: any;
 }
 
-const auth = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
+const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'No token, authorization denied' });
+    return res.status(401).json({ message: 'Authentication token required' });
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string; role: UserRole };
-    (req as AuthRequest).user = decoded;
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET is not defined');
+    }
+
+    const decoded = jwt.verify(token, secret);
+    req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Token is not valid' });
+    return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };
 
-export default auth;
+export default authenticateToken;
