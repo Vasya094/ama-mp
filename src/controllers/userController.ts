@@ -14,7 +14,13 @@ export const registerUser = async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await hashPassword(password);
-    const user = new User({ name, email, password: hashedPassword });
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      provider: 'local',
+      role: UserRole.USER
+    });
     await user.save();
 
     res.status(201).json({ message: 'User registered successfully' });
@@ -26,9 +32,9 @@ export const registerUser = async (req: Request, res: Response) => {
 export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email, provider: 'local' });
 
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
@@ -44,7 +50,15 @@ export const loginUser = async (req: Request, res: Response) => {
       { expiresIn: '1d' }
     );
 
-    res.json({ token });
+    res.json({ 
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -80,17 +94,24 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.name = name || user.name;
-    user.email = email || user.email;
-    if (password) {
+    if (name) user.name = name;
+    if (email) user.email = email;
+    
+    if (password && user.provider === 'local') {
       user.password = await hashPassword(password);
     }
-    if (role && Object.values(UserRole).includes(role)) {
-      user.role = role;
+    
+    if (role && Object.values(UserRole).includes(role as UserRole)) {
+      user.role = role as UserRole;
     }
 
     await user.save();
-    res.json({ message: 'User updated successfully' });
+    
+    const updatedUser = await User.findById(user._id).select('-password');
+    res.json({ 
+      message: 'User updated successfully',
+      user: updatedUser
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

@@ -35,7 +35,7 @@ connectDB();
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 
 // Swagger configuration
 const swaggerOptions = {

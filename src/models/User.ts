@@ -1,25 +1,58 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
 export enum UserRole {
   USER = 'user',
-  SELLER = 'seller',
-  ADMIN = 'admin'
+  ADMIN = 'admin',
+  SELLER = 'seller'
 }
 
 export interface IUser extends Document {
-  name: string;
   email: string;
-  password: string;
-  role: UserRole;
+  name: string;
+  password?: string;
+  provider: 'google' | 'local';
   googleId?: string;
+  role: UserRole;
+  avatar?: string;
 }
 
-const UserSchema: Schema = new Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  role: { type: String, enum: Object.values(UserRole), default: UserRole.USER },
-  googleId: { type: String },
-}, { timestamps: true });
+const userSchema = new Schema<IUser>({
+  email: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  password: {
+    type: String,
+    required: function() {
+      return this.provider === 'local';
+    }
+  },
+  provider: {
+    type: String,
+    required: true,
+    enum: ['google', 'local'],
+    default: 'local'
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  role: {
+    type: String,
+    enum: Object.values(UserRole),
+    default: UserRole.USER
+  },
+  avatar: {
+    type: String
+  }
+}, {
+  timestamps: true
+});
 
-export default mongoose.model<IUser>('User', UserSchema);
+export default mongoose.model<IUser>('User', userSchema);
